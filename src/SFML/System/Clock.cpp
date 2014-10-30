@@ -37,7 +37,12 @@
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-Clock::Clock() :
+
+float Clock::getCurrentTime() {
+    return priv::ClockImpl::getCurrentTimeAsFloat();
+}
+
+    Clock::Clock() :
 m_startTime(priv::ClockImpl::getCurrentTime())
 {
 }

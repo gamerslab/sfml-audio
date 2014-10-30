@@ -59,6 +59,26 @@ Time ClockImpl::getCurrentTime()
 #endif
 }
 
+float ClockImpl::getCurrentTimeAsFloat() {
+#if defined(SFML_SYSTEM_MACOS) || defined(SFML_SYSTEM_IOS)
+
+// Mac OS X specific implementation (it doesn't support clock_gettime)
+static mach_timebase_info_data_t frequency = {0, 0};
+if (frequency.denom == 0)
+    mach_timebase_info(&frequency);
+Uint64 nanoseconds = mach_absolute_time() * frequency.numer / frequency.denom;
+return (nanoseconds / 1000) / 1000000.f;
+
+#else
+
+    // POSIX implementation
+    timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    return time.tv_sec + (time.tv_nsec / 1000) / 1000000.f;
+
+#endif
+}
+
 } // namespace priv
 
 } // namespace sf

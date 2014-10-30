@@ -51,6 +51,8 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     static Time getCurrentTime();
+
+    static float getCurrentTimeAsFloat();
 };
 
 } // namespace priv

@@ -42,6 +42,8 @@ class SFML_SYSTEM_API Clock
 {
 public:
 
+    static float getCurrentTime();
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///

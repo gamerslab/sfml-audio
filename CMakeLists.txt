@@ -26,6 +26,7 @@ set(VERSION_PATCH 0)
 
 # add the SFML header path
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(SFML_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include CACHE INTERNAL "DIRS")
 
 # add an option for choosing the build type (shared or static)
 if(NOT (SFML_OS_IOS OR SFML_OS_ANDROID))
@@ -61,28 +62,6 @@ if(SFML_OS_MACOSX)
 
     # add an option to automatically install Xcode templates
     sfml_set_option(SFML_INSTALL_XCODE_TEMPLATES FALSE BOOL "TRUE to automatically install the Xcode templates, FALSE to do nothing about it. The templates are compatible with Xcode 4 and 5.")
-endif()
-
-# Android options
-if(SFML_OS_ANDROID)
-    # force usage of the STL port
-    set(ANDROID_USE_STLPORT TRUE)
-
-    # make sure there's the android library available
-    if (${ANDROID_NATIVE_API_LEVEL} LESS 9)
-        message(FATAL_ERROR "API level must be equal or greater than 9")
-    endif()
-
-    # install everything in $NDK/sources/ because this path is appended by the NDK (convenient)
-    set(CMAKE_INSTALL_PREFIX ${ANDROID_NDK}/sources/sfml)
-
-    # we install libs in a subdirectory named after the ABI (lib/mips/*.so)
-    set(LIB_SUFFIX "/${ANDROID_ABI}")
-
-    # this is a workaround to compile sfml-activity without stlport_shared as dependency
-    # we save the original compilation command line to restore it later in Macro.cmake
-    set(CMAKE_CXX_CREATE_SHARED_LIBRARY_WITH_STLPORT ${CMAKE_CXX_CREATE_SHARED_LIBRARY})
-    set(CMAKE_CXX_CREATE_SHARED_LIBRARY_WITHOUT_STLPORT "<CMAKE_CXX_COMPILER> <CMAKE_SHARED_LIBRARY_CXX_FLAGS> <LANGUAGE_COMPILE_FLAGS> <LINK_FLAGS> <CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS> <SONAME_FLAG><TARGET_SONAME> -o <TARGET> <OBJECTS> <LINK_LIBRARIES>")
 endif()
 
 # define SFML_STATIC if the build type is not set to 'shared'
@@ -191,60 +170,38 @@ if(SFML_BUILD_DOC)
 endif()
 
 # setup the install rules
-if(NOT SFML_BUILD_FRAMEWORKS)
-    install(DIRECTORY include
-            DESTINATION .
-            COMPONENT devel
-            FILES_MATCHING PATTERN "*.hpp" PATTERN "*.inl")
-else()
-    # find only "root" headers
-    file(GLOB SFML_HEADERS RELATIVE ${PROJECT_SOURCE_DIR} "include/SFML/*")
+# find only "root" headers
+file(GLOB SFML_HEADERS RELATIVE ${PROJECT_SOURCE_DIR} "include/SFML/*")
 
-    # in fact we have to fool cmake to copy all the headers in subdirectories
-    # to do that we have to add the "root" headers to the PUBLIC_HEADER
-    # then we can run a post script to copy the remaining headers
+# in fact we have to fool cmake to copy all the headers in subdirectories
+# to do that we have to add the "root" headers to the PUBLIC_HEADER
+# then we can run a post script to copy the remaining headers
 
-    # we need a dummy file in order to compile the framework
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp
-                       COMMAND touch ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)
+# we need a dummy file in order to compile the framework
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp
+                   COMMAND touch ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)
 
-    set(SFML_SOURCES ${SFML_HEADERS})
-    list(APPEND SFML_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)
+set(SFML_SOURCES ${SFML_HEADERS})
+list(APPEND SFML_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)
 
-    # create SFML.framework
-    add_library(SFML ${SFML_SOURCES})
+# create SFML.framework
+add_library(SFML ${SFML_SOURCES})
 
-    # edit target properties
-    set_target_properties(SFML PROPERTIES
-                          FRAMEWORK TRUE
-                          FRAMEWORK_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
-                          MACOSX_FRAMEWORK_IDENTIFIER org.sfml-dev.SFML
-                          MACOSX_FRAMEWORK_SHORT_VERSION_STRING ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
-                          MACOSX_FRAMEWORK_BUNDLE_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
-                          PUBLIC_HEADER "${SFML_HEADERS}")
+# edit target properties
+set_target_properties(SFML PROPERTIES
+                      FRAMEWORK TRUE
+                      FRAMEWORK_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+                      MACOSX_FRAMEWORK_IDENTIFIER org.sfml-dev.SFML
+                      MACOSX_FRAMEWORK_SHORT_VERSION_STRING ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+                      MACOSX_FRAMEWORK_BUNDLE_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+                      PUBLIC_HEADER "${SFML_HEADERS}")
 
-    # add the remaining headers
-    add_custom_command(TARGET SFML
-                       POST_BUILD
-                       COMMAND cp -r ${PROJECT_SOURCE_DIR}/include/SFML/* $<TARGET_FILE_DIR:SFML>/Headers)
+# adapt install directory to allow distributing dylibs/frameworks in user’s frameworks/application bundle
+# NOTE: it's not required to link agains SFML.framework
+set_target_properties(SFML PROPERTIES
+                      BUILD_WITH_INSTALL_RPATH 1
+                      INSTALL_NAME_DIR "@rpath")
 
-    # adapt install directory to allow distributing dylibs/frameworks in user’s frameworks/application bundle
-    # NOTE: it's not required to link agains SFML.framework
-    set_target_properties(SFML PROPERTIES
-                          BUILD_WITH_INSTALL_RPATH 1
-                          INSTALL_NAME_DIR "@rpath")
-
-    # install rule
-    install(TARGETS SFML
-            FRAMEWORK DESTINATION ${CMAKE_INSTALL_FRAMEWORK_PREFIX}
-            COMPONENT devel)
-endif()
-
-install(FILES license.txt DESTINATION ${INSTALL_MISC_DIR})
-install(FILES readme.txt DESTINATION ${INSTALL_MISC_DIR})
-if(NOT SFML_OS_ANDROID)
-    install(FILES cmake/Modules/FindSFML.cmake DESTINATION ${INSTALL_MISC_DIR}/cmake/Modules)
-endif()
 
 # install 3rd-party libraries and tools
 if(SFML_OS_WINDOWS)
@@ -271,36 +228,5 @@ elseif(SFML_OS_MACOSX)
     # install the non-standard frameworks SFML depends on
     install(DIRECTORY extlibs/libs-osx/Frameworks/sndfile.framework DESTINATION ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
     install(DIRECTORY extlibs/libs-osx/Frameworks/freetype.framework DESTINATION ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
-
-    # install the Xcode templates if requested
-    if(SFML_INSTALL_XCODE_TEMPLATES)
-        configure_file(
-                    "tools/xcode/templates/SFML/SFML Compiler.xctemplate/TemplateInfo.plist.in"
-                    "${CMAKE_CURRENT_BINARY_DIR}/tools/xcode/templates/SFML/SFML Compiler.xctemplate/TemplateInfo.plist"
-                    @ONLY)
-        install(DIRECTORY "tools/xcode/templates/SFML" "${CMAKE_CURRENT_BINARY_DIR}/tools/xcode/templates/SFML"
-                DESTINATION /Library/Developer/Xcode/Templates
-                PATTERN "*.in" EXCLUDE)
-    endif()
-
-elseif(SFML_OS_IOS)
-
-    # fix CMake install rules broken for iOS (see http://public.kitware.com/Bug/view.php?id=12506)
-    if(SFML_OS_IOS)
-        install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/\$ENV{CONFIGURATION}/" DESTINATION lib${LIB_SUFFIX})
-    endif()
-
-    # since the iOS libraries are built as static, we must install the SFML dependencies
-    # too so that the end user can easily link them to its final application
-    install(FILES extlibs/libs-ios/libfreetype.a extlibs/libs-ios/libjpeg.a DESTINATION lib)
-
-elseif(SFML_OS_ANDROID)
-
-    # install extlibs
-    install(DIRECTORY extlibs/libs-android/${ANDROID_ABI} DESTINATION extlibs/lib)
-    install(FILES extlibs/Android.mk DESTINATION extlibs)
-
-    # install Android.mk so the NDK knows how to set up SFML
-    install(FILES src/SFML/Android.mk DESTINATION .)
 
 endif()
