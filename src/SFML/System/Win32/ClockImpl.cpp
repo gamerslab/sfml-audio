@@ -68,7 +68,7 @@ Time ClockImpl::getCurrentTime()
         SetThreadAffinityMask(currentThread, previousMask);
 
         // Return the current time as seconds
-        return time.QuadPart / frequency.QuadPart;
+		return ((1000 * time.QuadPart) / frequency.QuadPart) / 1000.0f;
     }
 
 } // namespace priv
