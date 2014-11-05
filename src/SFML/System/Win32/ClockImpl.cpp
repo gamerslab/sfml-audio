@@ -27,7 +27,6 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/System/Win32/ClockImpl.hpp>
 #include <windows.h>
-#include "../Unix/ClockImpl.hpp"
 
 
 namespace
